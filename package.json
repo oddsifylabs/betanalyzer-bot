@@ -1,0 +1,22 @@
+{
+  "name": "betanalyzer-bot",
+  "version": "1.0.0",
+  "description": "Telegram bot for sports bet analysis with Claude AI",
+  "main": "bot.js",
+  "scripts": {
+    "start": "node bot.js",
+    "dev": "nodemon bot.js"
+  },
+  "dependencies": {
+    "telegraf": "^4.16.0",
+    "dotenv": "^16.3.1",
+    "@anthropic-ai/sdk": "^0.24.0",
+    "axios": "^1.6.2"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2"
+  },
+  "engines": {
+    "node": "18.x"
+  }
+}

@@ -25,19 +25,24 @@ bot.use((ctx, next) => {
 });
 
 // /start command
-bot.command('start', (ctx) => {
-  ctx.reply(
-    '*BetAnalyzer Bot - Your AI Betting Assistant*\n\n' +
-    'Convert your sports bets into AI-powered analysis.\n\n' +
-    '*Commands:*\n' +
-    '• /upload_csv - Upload your bet picks (CSV)\n' +
-    '• /analyze - Get Claude AI recommendations\n' +
-    '• /stats - View your performance\n' +
-    '• /tier - See subscription options\n' +
-    '• /help - Show all commands\n\n' +
-    'CSV Format: pick, odds, stake, result',
-    { parse_mode: 'Markdown' }
-  );
+bot.command('start', async (ctx) => {
+  try {
+    ctx.reply(
+      '*BetAnalyzer Bot - Your AI Betting Assistant*\n\n' +
+      'Convert your sports bets into AI-powered analysis.\n\n' +
+      '*Commands:*\n' +
+      '• /upload_csv - Upload your bet picks (CSV)\n' +
+      '• /analyze - Get Claude AI recommendations\n' +
+      '• /stats - View your performance\n' +
+      '• /tier - See subscription options\n' +
+      '• /help - Show all commands\n\n' +
+      'CSV Format: pick, odds, stake, result',
+      { parse_mode: 'Markdown' }
+    );
+  } catch (error) {
+    console.error('Error in /start command:', error.message);
+    ctx.reply('Welcome to BetAnalyzer Bot! Use /help for commands.').catch(() => {});
+  }
 });
 
 // /help command
@@ -213,6 +218,11 @@ bot.command('settings', (ctx) => {
 });
 
 // Launch
+bot.catch((err, ctx) => {
+  console.error('Telegram error caught:', err);
+  ctx.reply('Sorry, something went wrong. Please try again later.').catch(() => {});
+});
+
 bot.launch();
 
 console.log('🚀 BetAnalyzer Bot is running...');

@@ -182,8 +182,11 @@ bot.command('analyze', async (ctx) => {
     ctx.reply('Analyzing with Claude AI...');
 
     try {
+      console.log('DEBUG: Bets data:', JSON.stringify(bets, null, 2));
+      console.log('DEBUG: First bet keys:', Object.keys(bets[0]));
+      
       const betsText = bets
-        .map((b, i) => `${i + 1}. ${b.pick} @ ${b.odds} (${b.stake})`);
+        .map((b, i) => `${i + 1}. ${b.pick || b.team || b.bet || 'Unknown'} @ ${b.odds || b.line || 'N/A'} (${b.stake || b.amount || b.wager || 'N/A'})`);
 
       const message = await client.messages.create({
         model: 'claude-opus-4-1',

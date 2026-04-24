@@ -28,62 +28,71 @@ bot.use((ctx, next) => {
 bot.command('start', async (ctx) => {
   try {
     ctx.reply(
-      '*BetAnalyzer Bot - Your AI Betting Assistant*\n\n' +
+      'BetAnalyzer Bot - Your AI Betting Assistant\n\n' +
       'Convert your sports bets into AI-powered analysis.\n\n' +
-      '*Commands:*\n' +
+      'COMMANDS:\n' +
       '• /upload_csv - Upload your bet picks (CSV)\n' +
       '• /analyze - Get Claude AI recommendations\n' +
       '• /stats - View your performance\n' +
       '• /tier - See subscription options\n' +
       '• /help - Show all commands\n\n' +
-      'CSV Format: pick, odds, stake, result',
-      { parse_mode: 'Markdown' }
+      'CSV Format: pick, odds, stake, result'
     );
   } catch (error) {
     console.error('Error in /start command:', error.message);
-    ctx.reply('Welcome to BetAnalyzer Bot! Use /help for commands.').catch(() => {});
+    try {
+      ctx.reply('Welcome to BetAnalyzer Bot! Use /help for commands.');
+    } catch (e) {
+      console.error('Fallback reply also failed:', e.message);
+    }
   }
 });
 
 // /help command
 bot.command('help', (ctx) => {
-  ctx.reply(
-    '*BetAnalyzer Commands:*\n\n' +
-    '📤 /upload_csv\n' +
-    'Upload CSV file with bet picks\n\n' +
-    '🤖 /analyze\n' +
-    'Get AI analysis (PLACE/PASS)\n\n' +
-    '📊 /stats\n' +
-    'Win/loss tracking\n\n' +
-    '💎 /tier\n' +
-    'View premium features\n\n' +
-    '⚙️ /settings\n' +
-    'Configure preferences',
-    { parse_mode: 'Markdown' }
-  );
+  try {
+    ctx.reply(
+      'BetAnalyzer Commands:\n\n' +
+      '📤 /upload_csv\n' +
+      'Upload CSV file with bet picks\n\n' +
+      '🤖 /analyze\n' +
+      'Get AI analysis (PLACE/PASS)\n\n' +
+      '📊 /stats\n' +
+      'Win/loss tracking\n\n' +
+      '💎 /tier\n' +
+      'View premium features\n\n' +
+      '⚙️ /settings\n' +
+      'Configure preferences'
+    );
+  } catch (error) {
+    console.error('Error in /help command:', error.message);
+  }
 });
 
 // /tier command
 bot.command('tier', (ctx) => {
-  ctx.reply(
-    '*🎁 Subscription Tiers*\n\n' +
-    '*Free*\n' +
-    '✓ 1 analysis/day\n' +
-    '✓ CSV uploads\n' +
-    '✓ Basic stats\n\n' +
-    '*Pro ($9.99/mo or $99/yr)*\n' +
-    '✓ Unlimited analyses\n' +
-    '✓ Priority AI response\n' +
-    '✓ Advanced metrics\n' +
-    '✓ Bet history export\n\n' +
-    '*Elite ($999 lifetime)*\n' +
-    '✓ Everything in Pro\n' +
-    '✓ Private channel access\n' +
-    '✓ Custom AI model tuning\n' +
-    '✓ Whatsapp/Discord bot access\n\n' +
-    '[Subscribe](https://whop.com/alexbet) 💳',
-    { parse_mode: 'Markdown' }
-  );
+  try {
+    ctx.reply(
+      'SUBSCRIPTION TIERS\n\n' +
+      'FREE\n' +
+      '✓ 1 analysis/day\n' +
+      '✓ CSV uploads\n' +
+      '✓ Basic stats\n\n' +
+      'PRO ($9.99/mo or $99/yr)\n' +
+      '✓ Unlimited analyses\n' +
+      '✓ Priority AI response\n' +
+      '✓ Advanced metrics\n' +
+      '✓ Bet history export\n\n' +
+      'ELITE ($999 lifetime)\n' +
+      '✓ Everything in Pro\n' +
+      '✓ Private channel access\n' +
+      '✓ Custom AI model tuning\n' +
+      '✓ Whatsapp/Discord bot access\n\n' +
+      'Subscribe: https://whop.com/alexbet 💳'
+    );
+  } catch (error) {
+    console.error('Error in /tier command:', error.message);
+  }
 });
 
 // Handle document uploads (CSV files)
@@ -135,76 +144,82 @@ bot.on('document', async (ctx) => {
 
 // /analyze command - Get Claude AI recommendations
 bot.command('analyze', async (ctx) => {
-  const userId = ctx.from.id;
-  const bets = userData[userId].uploadedBets;
+  try {
+    const userId = ctx.from.id;
+    const bets = userData[userId].uploadedBets;
 
-  if (!bets || bets.length === 0) {
-    ctx.reply('❌ No bets loaded. Use /upload_csv first');
-    return;
-  }
-
-  // Check tier limit (free users: 1/day)
-  if (userData[userId].tier === 'free') {
-    const lastAnalysis = userData[userId].lastAnalysis;
-    if (lastAnalysis && new Date() - lastAnalysis < 86400000) {
-      ctx.reply('⏳ Free users get 1 analysis per day.\nUpgrade to Pro for unlimited: /tier');
+    if (!bets || bets.length === 0) {
+      ctx.reply('No bets loaded. Use /upload_csv first');
       return;
     }
-  }
 
-  ctx.reply('🤖 Analyzing with Claude AI...');
+    // Check tier limit (free users: 1/day)
+    if (userData[userId].tier === 'free') {
+      const lastAnalysis = userData[userId].lastAnalysis;
+      if (lastAnalysis && new Date() - lastAnalysis < 86400000) {
+        ctx.reply('Free users get 1 analysis per day. Upgrade to Pro for unlimited: /tier');
+        return;
+      }
+    }
 
-  try {
-    const betsText = bets
-      .map((b, i) => `${i + 1}. ${b.pick} @ ${b.odds} (${b.stake})`);
+    ctx.reply('Analyzing with Claude AI...');
 
-    const message = await client.messages.create({
-      model: 'claude-opus-4-1',
-      max_tokens: 1024,
-      messages: [
-        {
-          role: 'user',
-          content: `You are a sports betting expert. Analyze these picks and respond with PLACE or PASS for each:\n\n${betsText.join('\n')}\n\nFor each pick, explain your recommendation in 1-2 sentences. Focus on value, odds, and edge.`,
-        },
-      ],
-    });
+    try {
+      const betsText = bets
+        .map((b, i) => `${i + 1}. ${b.pick} @ ${b.odds} (${b.stake})`);
 
-    const analysis = message.content[0].text;
-    userData[userId].lastAnalysis = new Date();
+      const message = await client.messages.create({
+        model: 'claude-opus-4-1',
+        max_tokens: 1024,
+        messages: [
+          {
+            role: 'user',
+            content: `You are a sports betting expert. Analyze these picks and respond with PLACE or PASS for each:\n\n${betsText.join('\n')}\n\nFor each pick, explain your recommendation in 1-2 sentences. Focus on value, odds, and edge.`,
+          },
+        ],
+      });
 
-    ctx.reply(
-      '✅ *AI Analysis Results*\n\n' + analysis + '\n\n' +
-      '_Powered by Claude AI_',
-      { parse_mode: 'Markdown' }
-    );
+      const analysis = message.content[0].text;
+      userData[userId].lastAnalysis = new Date();
+
+      ctx.reply(
+        'AI ANALYSIS RESULTS\n\n' + analysis + '\n\n' +
+        'Powered by Claude AI'
+      );
+    } catch (error) {
+      ctx.reply('Analysis failed: ' + error.message);
+    }
   } catch (error) {
-    ctx.reply('❌ Analysis failed: ' + error.message);
+    console.error('Error in /analyze command:', error.message);
   }
 });
 
 // /stats command
 bot.command('stats', (ctx) => {
-  const userId = ctx.from.id;
-  const bets = userData[userId].uploadedBets;
+  try {
+    const userId = ctx.from.id;
+    const bets = userData[userId].uploadedBets;
 
-  if (!bets || bets.length === 0) {
-    ctx.reply('No bet history yet. Upload a CSV to get started!');
-    return;
+    if (!bets || bets.length === 0) {
+      ctx.reply('No bet history yet. Upload a CSV to get started!');
+      return;
+    }
+
+    const total = bets.length;
+    const wins = bets.filter(b => b.result === 'win' || b.result === 'W').length;
+    const losses = total - wins;
+    const winRate = ((wins / total) * 100).toFixed(1);
+
+    ctx.reply(
+      'YOUR STATS\n\n' +
+      `Total Bets: ${total}\n` +
+      `Wins: ${wins} 🟢\n` +
+      `Losses: ${losses} 🔴\n` +
+      `Win Rate: ${winRate}%`
+    );
+  } catch (error) {
+    console.error('Error in /stats command:', error.message);
   }
-
-  const total = bets.length;
-  const wins = bets.filter(b => b.result === 'win' || b.result === 'W').length;
-  const losses = total - wins;
-  const winRate = ((wins / total) * 100).toFixed(1);
-
-  ctx.reply(
-    '*📊 Your Stats*\n\n' +
-    `Total Bets: ${total}\n` +
-    `Wins: ${wins} 🟢\n` +
-    `Losses: ${losses} 🔴\n` +
-    `Win Rate: ${winRate}%`,
-    { parse_mode: 'Markdown' }
-  );
 });
 
 // /settings command

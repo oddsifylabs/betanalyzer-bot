@@ -27,6 +27,8 @@ async function callKimiAPI(model, messages, maxTokens = 1024) {
   }
 
   try {
+    console.log(`[Kimi] Calling ${model} at ${kimiApiBase}/chat/completions`);
+    
     const response = await axios.post(`${kimiApiBase}/chat/completions`, {
       model,
       messages,
@@ -37,12 +39,20 @@ async function callKimiAPI(model, messages, maxTokens = 1024) {
         'Authorization': `Bearer ${kimiApiKey}`,
         'Content-Type': 'application/json',
       },
+      timeout: 30000,
     });
 
+    console.log(`[Kimi] Success: ${model}`);
     return response.data.choices[0].message.content;
   } catch (error) {
-    console.error('Kimi API error:', error.response?.data || error.message);
-    throw new Error(`Kimi API call failed: ${error.message}`);
+    const errorDetails = {
+      status: error.response?.status,
+      statusText: error.response?.statusText,
+      data: error.response?.data,
+      message: error.message,
+    };
+    console.error('[Kimi] API error:', JSON.stringify(errorDetails, null, 2));
+    throw new Error(`Kimi API call failed (${error.response?.status || 'unknown'}): ${error.response?.data?.error?.message || error.message}`);
   }
 }
 

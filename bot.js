@@ -128,7 +128,7 @@ bot.command('start', async (ctx) => {
       'BetAnalyzer Bot - Your AI Betting Assistant\n\n' +
       'Convert your sports bets into AI-powered analysis.\n\n' +
       'COMMANDS:\n' +
-      '• /upload_csv - Upload your bet picks (CSV or JSON)\n' +
+      '• /upload_csv - Upload your bet picks (CSV)\n' +
       '• /analyze - Get AI recommendations (auto-routed)\n' +
       '• /stats - View your performance\n' +
       '• /tier - See subscription options\n' +
@@ -192,41 +192,38 @@ bot.command('tier', (ctx) => {
   }
 });
 
-// /upload_csv command - Prompt user to attach a CSV or JSON file
+// /upload_csv command - Prompt user to attach a CSV file
 bot.command('upload_csv', (ctx) => {
   try {
     ctx.reply(
       'UPLOAD YOUR BET PICKS\n\n' +
-      'Send a CSV or TXT file with your bet data.\n\n' +
-      'JSON Format (recommended - save as .txt):\n' +
-      '[\n' +
-      '  {"signal": "Lakers ML", "odds": 195, "stake": 100},\n' +
-      '  {"signal": "Warriors -5", "odds": 210, "stake": 50}\n' +
-      ']\n\n' +
-      'CSV Format (save as .csv):\n' +
-      'signal,odds,stake\n' +
-      'Lakers ML,195,100\n' +
-      'Warriors -5,210,50\n\n' +
-      'NOTE: Telegram only allows .csv, .txt, .pdf, .docx, etc. Save JSON as .txt file.'
+      'Send a CSV file with your bet data.\n\n' +
+      'CSV Format:\n' +
+      'signal,odds,game,market,edge_percent,ev_percent\n' +
+      'Lakers ML,195,Lakers vs Celtics,MONEYLINE,1.5,3.2\n' +
+      'Warriors -5,210,Warriors vs Grizzlies,SPREAD,2.1,4.5\n\n' +
+      'Required columns: signal, odds\n' +
+      'Optional: game, market, edge_percent, ev_percent, rank, sport, kelly_stake\n\n' +
+      'Attach CSV file now'
     );
   } catch (error) {
     console.error('Error in /upload_csv command:', error.message);
   }
 });
 
-// Handle document uploads (CSV or TXT files)
+// Handle CSV file uploads
 bot.on('document', async (ctx) => {
   const userId = ctx.from.id;
   const file = ctx.message.document;
   const fileName = file.file_name.toLowerCase();
 
   // Check file type
-  if (!fileName.endsWith('.csv') && !fileName.endsWith('.txt')) {
-    ctx.reply('Please upload a CSV or TXT file (e.g., bets.csv or bets.txt)\n\nNOTE: Telegram blocks .json files. Save JSON as .txt instead.');
+  if (!fileName.endsWith('.csv')) {
+    ctx.reply('Please upload a CSV file (e.g., bets.csv)');
     return;
   }
 
-  ctx.reply('Processing file... one moment');
+  ctx.reply('Processing CSV... one moment');
 
   try {
     // Download file
@@ -243,60 +240,42 @@ bot.on('document', async (ctx) => {
     // Trim whitespace
     fileContent = fileContent.trim();
     
-    console.log('DEBUG: File content preview:', fileContent.substring(0, 100));
-    console.log('DEBUG: File content length:', fileContent.length);
-    console.log('DEBUG: First char code:', fileContent.charCodeAt(0));
+    console.log('DEBUG: CSV content preview:', fileContent.substring(0, 150));
+    console.log('DEBUG: CSV content length:', fileContent.length);
 
-    let bets = [];
+    // Parse CSV
+    const rows = fileContent.split('\n').filter(row => row.trim());
+    if (rows.length < 2) {
+      ctx.reply('CSV must have at least a header row and one data row');
+      return;
+    }
+    
+    const headers = rows[0].split(',').map(h => h.trim());
+    const bets = [];
 
-    if (fileName.endsWith('.txt')) {
-      // Try to parse TXT as JSON first (for JSON data saved as .txt)
-      try {
-        bets = JSON.parse(fileContent);
-        if (!Array.isArray(bets)) {
-          ctx.reply('TXT file must contain a JSON array of bets. Example:\n[\n  {"signal": "Lakers", "odds": 195},\n  {"signal": "Warriors", "odds": 210}\n]');
-          return;
-        }
-      } catch (parseError) {
-        console.error('JSON Parse Error:', {
-          message: parseError.message,
-          position: parseError.message.match(/position (\d+)/)?.[1],
-          preview: fileContent.substring(0, 200),
-        });
-        
-        if (parseError.message.includes('Unexpected token')) {
-          const match = parseError.message.match(/position (\d+)/);
-          const pos = match ? parseInt(match[1]) : 0;
-          const context = fileContent.substring(Math.max(0, pos - 20), pos + 20);
-          ctx.reply(`Invalid JSON format at position ${pos}.\n\nContext: ...${context}...\n\nMake sure:\n• JSON is wrapped in [ ]\n• Use double quotes " not single quotes\n• No trailing commas`);
-        } else {
-          ctx.reply('Invalid JSON format: ' + parseError.message);
-        }
-        return;
-      }
-    } else {
-      // Parse CSV
-      const rows = fileContent.split('\n').filter(row => row.trim());
-      if (rows.length < 2) {
-        ctx.reply('CSV must have at least a header row and one data row');
-        return;
-      }
-      
-      const headers = rows[0].split(',').map(h => h.trim());
+    for (let i = 1; i < rows.length; i++) {
+      const values = rows[i].split(',').map(v => v.trim());
+      const bet = {};
+      headers.forEach((header, idx) => {
+        bet[header] = values[idx];
+      });
+      bets.push(bet);
+    }
 
-      for (let i = 1; i < rows.length; i++) {
-        const values = rows[i].split(',').map(v => v.trim());
-        const bet = {};
-        headers.forEach((header, idx) => {
-          bet[header] = values[idx];
-        });
-        bets.push(bet);
-      }
+    // Validate required columns
+    const requiredColumns = ['signal', 'odds'];
+    const hasRequired = requiredColumns.every(col => headers.includes(col));
+    
+    if (!hasRequired) {
+      ctx.reply(`CSV must have required columns: ${requiredColumns.join(', ')}\n\nFound columns: ${headers.join(', ')}`);
+      return;
     }
 
     // Store data
     userData[userId].uploadedBets = bets;
     userData[userId].lastUpload = new Date();
+
+    console.log('DEBUG: Parsed bets:', JSON.stringify(bets.slice(0, 2), null, 2));
 
     ctx.reply(
       `Loaded ${bets.length} bets!\n\n` +
@@ -304,8 +283,8 @@ bot.on('document', async (ctx) => {
       'Or /stats to see performance metrics'
     );
   } catch (error) {
-    console.error('File processing error:', error);
-    ctx.reply('Error processing file: ' + error.message);
+    console.error('CSV processing error:', error);
+    ctx.reply('Error processing CSV: ' + error.message);
   }
 });
 

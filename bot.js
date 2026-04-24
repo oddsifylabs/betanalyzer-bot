@@ -279,11 +279,17 @@ bot.on('document', async (ctx) => {
 
     const bets = [];
 
+    console.log(`DEBUG: Total lines in file: ${lines.length}`);
+    console.log(`DEBUG: First 3 lines raw:`, lines.slice(0, 3));
+
     for (const line of lines) {
       const parts = line.split('|').map(p => p.trim());
       
+      console.log(`DEBUG: Parsing line: "${line}"`);
+      console.log(`DEBUG: Parts after split:`, parts);
+      
       if (parts.length < 2) {
-        console.log('DEBUG: Skipping invalid line:', line);
+        console.log('DEBUG: Skipping invalid line (less than 2 parts):', line);
         continue;
       }
 
@@ -294,8 +300,11 @@ bot.on('document', async (ctx) => {
         date: parts[3] || 'N/A',
       };
 
+      console.log(`DEBUG: Created bet object:`, bet);
       bets.push(bet);
     }
+
+    console.log(`DEBUG: Total bets parsed: ${bets.length}`);
 
     if (bets.length === 0) {
       ctx.reply('No valid bets found. Format:\nLakers ML | 195 | Lakers vs Celtics | 4/25/2026');
@@ -305,6 +314,8 @@ bot.on('document', async (ctx) => {
     // Validate required fields
     const allHaveSignalAndOdds = bets.every(b => b.signal !== 'Unknown' && b.odds !== 'N/A');
     
+    console.log(`DEBUG: All bets have signal and odds: ${allHaveSignalAndOdds}`);
+
     if (!allHaveSignalAndOdds) {
       ctx.reply('All bets need at least: signal | odds\n\nExample:\nLakers ML | 195');
       return;
@@ -314,7 +325,7 @@ bot.on('document', async (ctx) => {
     userData[userId].uploadedBets = bets;
     userData[userId].lastUpload = new Date();
 
-    console.log('DEBUG: Parsed bets:', JSON.stringify(bets.slice(0, 2), null, 2));
+    console.log('DEBUG: Final uploaded bets:', JSON.stringify(bets, null, 2));
 
     ctx.reply(
       `Loaded ${bets.length} bets!\n\n` +
@@ -364,6 +375,8 @@ bot.command('analyze', async (ctx) => {
           const game = b.game || 'N/A';
           const date = b.date || 'N/A';
           
+          console.log(`DEBUG: Processing pick ${i + 1}: signal="${signal}", odds="${b.odds}", parsed_odds=${odds}`);
+          
           // Calculate implied probability from American odds
           let impliedProb = 'N/A';
           if (odds !== null) {
@@ -374,13 +387,14 @@ bot.command('analyze', async (ctx) => {
             }
           }
           
+          console.log(`DEBUG: Pick ${i + 1} calculated - impliedProb: ${impliedProb}`);
+          
           return `Pick ${i + 1}: ${signal}\nOdds: ${odds || 'N/A'} (Implied Prob: ${impliedProb}%)\nGame: ${game}\nDate: ${date}`;
         });
 
-      const message = await callAI(routing.model, [
-        {
-          role: 'user',
-          content: `You are a professional sports betting analyst. Analyze these picks and provide a PLACE or PASS recommendation for each.
+      console.log('DEBUG: Formatted bets text:', betsText);
+
+      const systemPrompt = `You are a professional sports betting analyst. Analyze these picks and provide a PLACE or PASS recommendation for each.
 
 Bets to analyze:
 
@@ -391,7 +405,14 @@ For each pick, provide:
 2. Brief reasoning (1-2 sentences) considering the odds and implied probability
 3. Risk assessment if PLACE
 
-Focus on value, line shopping, and sharp action indicators.`,
+Focus on value, line shopping, and sharp action indicators.`;
+
+      console.log('DEBUG: System prompt being sent to AI:', systemPrompt);
+
+      const message = await callAI(routing.model, [
+        {
+          role: 'user',
+          content: systemPrompt,
         },
       ]);
 

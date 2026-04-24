@@ -95,6 +95,23 @@ bot.command('tier', (ctx) => {
   }
 });
 
+// /upload_csv command - Prompt user to attach a CSV file
+bot.command('upload_csv', (ctx) => {
+  try {
+    ctx.reply(
+      'UPLOAD YOUR BET PICKS\\n\\n' +
+      'Send a CSV file with your bet data.\\n\\n' +
+      'CSV Format (with headers):\\n' +
+      'pick,odds,stake,result\\n' +
+      'Lakers ML,1.95,100,WIN\\n' +
+      'Warriors -5,2.10,50,LOSS\\n\\n' +
+      'Attach the CSV file now'
+    );
+  } catch (error) {
+    console.error('Error in /upload_csv command:', error.message);
+  }
+});
+
 // Handle document uploads (CSV files)
 bot.on('document', async (ctx) => {
   const userId = ctx.from.id;

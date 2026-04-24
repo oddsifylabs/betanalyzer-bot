@@ -197,32 +197,32 @@ bot.command('upload_csv', (ctx) => {
   try {
     ctx.reply(
       'UPLOAD YOUR BET PICKS\n\n' +
-      'Send a CSV or JSON file with your bet data.\n\n' +
-      'JSON Format (recommended):\n' +
+      'Send a CSV or TXT file with your bet data.\n\n' +
+      'JSON Format (recommended - save as .txt):\n' +
       '[\n' +
       '  {"signal": "Lakers ML", "odds": 195, "stake": 100},\n' +
       '  {"signal": "Warriors -5", "odds": 210, "stake": 50}\n' +
       ']\n\n' +
-      'CSV Format:\n' +
+      'CSV Format (save as .csv):\n' +
       'signal,odds,stake\n' +
       'Lakers ML,195,100\n' +
       'Warriors -5,210,50\n\n' +
-      'Attach the file now'
+      'NOTE: Telegram only allows .csv, .txt, .pdf, .docx, etc. Save JSON as .txt file.'
     );
   } catch (error) {
     console.error('Error in /upload_csv command:', error.message);
   }
 });
 
-// Handle document uploads (CSV or JSON files)
+// Handle document uploads (CSV or TXT files)
 bot.on('document', async (ctx) => {
   const userId = ctx.from.id;
   const file = ctx.message.document;
   const fileName = file.file_name.toLowerCase();
 
   // Check file type
-  if (!fileName.endsWith('.csv') && !fileName.endsWith('.json')) {
-    ctx.reply('Please upload a CSV or JSON file (e.g., bets.csv or bets.json)');
+  if (!fileName.endsWith('.csv') && !fileName.endsWith('.txt')) {
+    ctx.reply('Please upload a CSV or TXT file (e.g., bets.csv or bets.txt)\n\nNOTE: Telegram blocks .json files. Save JSON as .txt instead.');
     return;
   }
 
@@ -249,12 +249,12 @@ bot.on('document', async (ctx) => {
 
     let bets = [];
 
-    if (fileName.endsWith('.json')) {
-      // Parse JSON
+    if (fileName.endsWith('.txt')) {
+      // Try to parse TXT as JSON first (for JSON data saved as .txt)
       try {
         bets = JSON.parse(fileContent);
         if (!Array.isArray(bets)) {
-          ctx.reply('JSON must be an array of bets. Example:\n[\n  {"signal": "Lakers", "odds": 195},\n  {"signal": "Warriors", "odds": 210}\n]');
+          ctx.reply('TXT file must contain a JSON array of bets. Example:\n[\n  {"signal": "Lakers", "odds": 195},\n  {"signal": "Warriors", "odds": 210}\n]');
           return;
         }
       } catch (parseError) {
@@ -264,7 +264,6 @@ bot.on('document', async (ctx) => {
           preview: fileContent.substring(0, 200),
         });
         
-        // Try to provide helpful error message
         if (parseError.message.includes('Unexpected token')) {
           const match = parseError.message.match(/position (\d+)/);
           const pos = match ? parseInt(match[1]) : 0;

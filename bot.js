@@ -58,8 +58,29 @@ async function callAI(model, messages, maxTokens = 1024) {
     return response.content[0].text;
   }
 
-  // Otherwise assume it's a Kimi model
-  return await callKimiAPI(model, messages, maxTokens);
+  // If Kimi is configured, use Kimi API
+  if (kimiApiKey) {
+    try {
+      return await callKimiAPI(model, messages, maxTokens);
+    } catch (error) {
+      console.warn('Kimi API failed, falling back to Claude:', error.message);
+      // Fall back to Claude Opus
+      const response = await anthropicClient.messages.create({
+        model: 'claude-opus-4-1',
+        max_tokens: maxTokens,
+        messages,
+      });
+      return response.content[0].text;
+    }
+  }
+
+  // If Kimi not configured, use Claude
+  const response = await anthropicClient.messages.create({
+    model: 'claude-opus-4-1',
+    max_tokens: maxTokens,
+    messages,
+  });
+  return response.content[0].text;
 }
 
 // Route betting analysis based on complexity

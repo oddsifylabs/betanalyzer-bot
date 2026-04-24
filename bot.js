@@ -129,12 +129,12 @@ bot.command('start', async (ctx) => {
       'BetAnalyzer Bot - Your AI Betting Assistant\n\n' +
       'Convert your sports bets into AI-powered analysis.\n\n' +
       'COMMANDS:\n' +
-      '• /upload_csv - Upload bets (signal + odds columns only)\n' +
-      '• /analyze - Get AI recommendations (auto-routed)\n' +
+      '• /upload_csv - Upload Excel file (signal, odds, +game, +date)\n' +
+      '• /analyze - Get AI recommendations\n' +
       '• /stats - View your performance\n' +
       '• /tier - See subscription options\n' +
       '• /help - Show all commands\n\n' +
-      'Just 2 columns in Excel: signal, odds. That\'s all!'
+      'Best results: Include signal, odds, game, and date in Excel.'
     );
   } catch (error) {
     console.error('Error in /start command:', error.message);
@@ -199,14 +199,17 @@ bot.command('upload_csv', (ctx) => {
     ctx.reply(
       'UPLOAD YOUR BET PICKS\n\n' +
       'Send an Excel file (.xlsx) with your bets.\n\n' +
-      'ONLY 2 COLUMNS NEEDED:\n\n' +
-      'Column 1: signal\n' +
-      'Column 2: odds\n\n' +
+      'REQUIRED (2 columns):\n' +
+      '• signal - Team/player name\n' +
+      '• odds - Betting odds\n\n' +
+      'OPTIONAL (for better analysis):\n' +
+      '• game - Matchup (e.g., Lakers vs Celtics)\n' +
+      '• date - Game date (e.g., 4/25/2026)\n' +
+      '• market - Bet type (MONEYLINE, SPREAD, TOTAL)\n\n' +
       'Example:\n' +
-      'Lakers ML | 195\n' +
-      'Warriors -5 | 210\n' +
-      'Knicks ML | 120\n\n' +
-      'That\'s all! Upload and I\'ll analyze.'
+      'signal | odds | game | date\n' +
+      'Lakers ML | 195 | Lakers vs Celtics | 4/25/2026\n' +
+      'Warriors -5 | 210 | Warriors vs Grizzlies | 4/26/2026'
     );
   } catch (error) {
     console.error('Error in /upload_csv command:', error.message);
@@ -325,10 +328,11 @@ bot.command('analyze', async (ctx) => {
           const signal = b.signal || b.pick || b.team || b.bet || 'Unknown';
           const odds = b.odds || b.line || 'N/A';
           const game = b.game || 'N/A';
+          const date = b.date || 'N/A';
           const market = b.market || 'UNKNOWN';
           const edge = b.edge_percent || 'N/A';
           const ev = b.ev_percent || 'N/A';
-          return `${i + 1}. ${signal} @ ${odds}\nGame: ${game}\nMarket: ${market} | Edge: ${edge}% | EV: ${ev}%`;
+          return `${i + 1}. ${signal} @ ${odds}\nGame: ${game}\nDate: ${date}\nMarket: ${market} | Edge: ${edge}% | EV: ${ev}%`;
         });
 
       const message = await callAI(routing.model, [

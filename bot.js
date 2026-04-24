@@ -95,54 +95,75 @@ bot.command('tier', (ctx) => {
   }
 });
 
-// /upload_csv command - Prompt user to attach a CSV file
+// /upload_csv command - Prompt user to attach a CSV or JSON file
 bot.command('upload_csv', (ctx) => {
   try {
     ctx.reply(
-      'UPLOAD YOUR BET PICKS\\n\\n' +
-      'Send a CSV file with your bet data.\\n\\n' +
-      'CSV Format (with headers):\\n' +
-      'pick,odds,stake,result\\n' +
-      'Lakers ML,1.95,100,WIN\\n' +
-      'Warriors -5,2.10,50,LOSS\\n\\n' +
-      'Attach the CSV file now'
+      'UPLOAD YOUR BET PICKS\n\n' +
+      'Send a CSV or JSON file with your bet data.\n\n' +
+      'JSON Format (recommended):\n' +
+      '[\n' +
+      '  {"signal": "Lakers ML", "odds": 195, "stake": 100},\n' +
+      '  {"signal": "Warriors -5", "odds": 210, "stake": 50}\n' +
+      ']\n\n' +
+      'CSV Format:\n' +
+      'signal,odds,stake\n' +
+      'Lakers ML,195,100\n' +
+      'Warriors -5,210,50\n\n' +
+      'Attach the file now'
     );
   } catch (error) {
     console.error('Error in /upload_csv command:', error.message);
   }
 });
 
-// Handle document uploads (CSV files)
+// Handle document uploads (CSV or JSON files)
 bot.on('document', async (ctx) => {
   const userId = ctx.from.id;
   const file = ctx.message.document;
+  const fileName = file.file_name.toLowerCase();
 
   // Check file type
-  if (!file.file_name.endsWith('.csv')) {
-    ctx.reply('❌ Please upload a CSV file (e.g., bets.csv)');
+  if (!fileName.endsWith('.csv') && !fileName.endsWith('.json')) {
+    ctx.reply('Please upload a CSV or JSON file (e.g., bets.csv or bets.json)');
     return;
   }
 
-  ctx.reply('📥 Processing CSV... one moment');
+  ctx.reply('Processing file... one moment');
 
   try {
     // Download file
     const fileLink = await ctx.telegram.getFileLink(file.file_id);
     const response = await axios.get(fileLink);
-    const csvContent = response.data;
+    const fileContent = response.data;
 
-    // Parse CSV
-    const rows = csvContent.trim().split('\n');
-    const headers = rows[0].split(',').map(h => h.trim());
-    const bets = [];
+    let bets = [];
 
-    for (let i = 1; i < rows.length; i++) {
-      const values = rows[i].split(',').map(v => v.trim());
-      const bet = {};
-      headers.forEach((header, idx) => {
-        bet[header] = values[idx];
-      });
-      bets.push(bet);
+    if (fileName.endsWith('.json')) {
+      // Parse JSON
+      try {
+        bets = JSON.parse(fileContent);
+        if (!Array.isArray(bets)) {
+          ctx.reply('JSON must be an array of bets');
+          return;
+        }
+      } catch (parseError) {
+        ctx.reply('Invalid JSON format: ' + parseError.message);
+        return;
+      }
+    } else {
+      // Parse CSV
+      const rows = fileContent.trim().split('\n');
+      const headers = rows[0].split(',').map(h => h.trim());
+
+      for (let i = 1; i < rows.length; i++) {
+        const values = rows[i].split(',').map(v => v.trim());
+        const bet = {};
+        headers.forEach((header, idx) => {
+          bet[header] = values[idx];
+        });
+        bets.push(bet);
+      }
     }
 
     // Store data
@@ -150,12 +171,12 @@ bot.on('document', async (ctx) => {
     userData[userId].lastUpload = new Date();
 
     ctx.reply(
-      `✅ Loaded ${bets.length} bets!\n\n` +
+      `Loaded ${bets.length} bets!\n\n` +
       'Use /analyze to get AI recommendations\n' +
       'Or /stats to see performance metrics'
     );
   } catch (error) {
-    ctx.reply('❌ Error processing CSV: ' + error.message);
+    ctx.reply('Error processing file: ' + error.message);
   }
 });
 

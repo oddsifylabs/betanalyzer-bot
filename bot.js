@@ -1,7 +1,6 @@
 const { Telegraf } = require('telegraf');
 const axios = require('axios');
 const Anthropic = require('@anthropic-ai/sdk');
-const XLSX = require('xlsx');
 const fs = require('fs');
 const path = require('path');
 require('dotenv').config();
@@ -129,12 +128,13 @@ bot.command('start', async (ctx) => {
       'BetAnalyzer Bot - Your AI Betting Assistant\n\n' +
       'Convert your sports bets into AI-powered analysis.\n\n' +
       'COMMANDS:\n' +
-      '• /upload_csv - Upload Excel file (signal, odds, +game, +date)\n' +
+      '• /upload_csv - Upload bets (.txt file)\n' +
       '• /analyze - Get AI recommendations\n' +
       '• /stats - View your performance\n' +
       '• /tier - See subscription options\n' +
       '• /help - Show all commands\n\n' +
-      'Best results: Include signal, odds, game, and date in Excel.'
+      'Format: signal | odds | game | date\n' +
+      'Example: Lakers ML | 195 | Lakers vs Celtics | 4/25/2026'
     );
   } catch (error) {
     console.error('Error in /start command:', error.message);
@@ -193,103 +193,106 @@ bot.command('tier', (ctx) => {
   }
 });
 
-// /upload_csv command - Prompt user to attach an Excel file
+// /upload_csv command - Prompt user to attach a file
 bot.command('upload_csv', (ctx) => {
   try {
     ctx.reply(
       'UPLOAD YOUR BET PICKS\n\n' +
-      'Send an Excel file (.xlsx) with your bets.\n\n' +
-      'REQUIRED (2 columns):\n' +
-      '• signal - Team/player name\n' +
-      '• odds - Betting odds\n\n' +
-      'OPTIONAL (for better analysis):\n' +
-      '• game - Matchup (e.g., Lakers vs Celtics)\n' +
-      '• date - Game date (e.g., 4/25/2026)\n' +
-      '• market - Bet type (MONEYLINE, SPREAD, TOTAL)\n\n' +
-      'Example:\n' +
-      'signal | odds | game | date\n' +
+      'Send a text file (.txt) with your bets.\n\n' +
+      'Format (one bet per line):\n\n' +
       'Lakers ML | 195 | Lakers vs Celtics | 4/25/2026\n' +
-      'Warriors -5 | 210 | Warriors vs Grizzlies | 4/26/2026'
+      'Warriors -5 | 210 | Warriors vs Grizzlies | 4/26/2026\n' +
+      'Knicks ML | 120 | Knicks vs Hawks | 4/25/2026\n\n' +
+      'REQUIRED: signal | odds\n' +
+      'OPTIONAL: game | date\n\n' +
+      'That\'s it! Just use | to separate fields.\n' +
+      'Create in Notepad and save as .txt'
     );
   } catch (error) {
     console.error('Error in /upload_csv command:', error.message);
   }
 });
 
-// Handle Excel (.xlsx) file uploads
+// Handle text file uploads (simple pipe-separated format)
 bot.on('document', async (ctx) => {
   const userId = ctx.from.id;
   const file = ctx.message.document;
   const fileName = file.file_name.toLowerCase();
 
   // Check file type
-  if (!fileName.endsWith('.xlsx') && !fileName.endsWith('.xls')) {
-    ctx.reply('Please upload an Excel file (.xlsx or .xls)');
+  if (!fileName.endsWith('.txt')) {
+    ctx.reply('Please upload a .txt file\n\nFormat:\nLakers ML | 195 | Lakers vs Celtics | 4/25/2026');
     return;
   }
 
-  ctx.reply('Processing Excel file... one moment');
+  ctx.reply('Processing file... one moment');
 
   try {
     // Download file
     const fileLink = await ctx.telegram.getFileLink(file.file_id);
-    const response = await axios.get(fileLink, { responseType: 'arraybuffer' });
-    
-    console.log('DEBUG: Excel file downloaded, size:', response.data.length);
+    const response = await axios.get(fileLink);
+    let fileContent = response.data;
 
-    // Parse Excel file
-    const workbook = XLSX.read(response.data, { type: 'buffer' });
-    const sheetName = workbook.SheetNames[0];
+    // Remove BOM if present
+    if (typeof fileContent === 'string' && fileContent.charCodeAt(0) === 0xFEFF) {
+      fileContent = fileContent.slice(1);
+    }
+
+    // Parse lines
+    const lines = fileContent.trim().split('\n').filter(line => line.trim());
     
-    if (!sheetName) {
-      ctx.reply('Excel file is empty or has no sheets');
+    if (lines.length === 0) {
+      ctx.reply('File is empty. Add bets in format:\nLakers ML | 195 | Lakers vs Celtics | 4/25/2026');
       return;
     }
 
-    const sheet = workbook.Sheets[sheetName];
-    const rows = XLSX.utils.sheet_to_json(sheet);
+    const bets = [];
 
-    if (rows.length === 0) {
-      ctx.reply('Excel sheet is empty. Please add bet data.');
+    for (const line of lines) {
+      const parts = line.split('|').map(p => p.trim());
+      
+      if (parts.length < 2) {
+        console.log('DEBUG: Skipping invalid line:', line);
+        continue;
+      }
+
+      const bet = {
+        signal: parts[0] || 'Unknown',
+        odds: parts[1] || 'N/A',
+        game: parts[2] || 'N/A',
+        date: parts[3] || 'N/A',
+      };
+
+      bets.push(bet);
+    }
+
+    if (bets.length === 0) {
+      ctx.reply('No valid bets found. Format:\nLakers ML | 195 | Lakers vs Celtics | 4/25/2026');
       return;
     }
 
-    // Validate required columns
-    const requiredColumns = ['signal', 'odds'];
-    const firstRow = rows[0];
-    const hasRequired = requiredColumns.every(col => 
-      Object.keys(firstRow).some(key => key.toLowerCase() === col.toLowerCase())
-    );
+    // Validate required fields
+    const allHaveSignalAndOdds = bets.every(b => b.signal !== 'Unknown' && b.odds !== 'N/A');
     
-    if (!hasRequired) {
-      const availableColumns = Object.keys(firstRow).join(', ');
-      ctx.reply(`Excel must have required columns: ${requiredColumns.join(', ')}\n\nFound columns: ${availableColumns}`);
+    if (!allHaveSignalAndOdds) {
+      ctx.reply('All bets need at least: signal | odds\n\nExample:\nLakers ML | 195');
       return;
     }
-
-    // Normalize column names (case-insensitive)
-    const bets = rows.map(row => {
-      const normalizedRow = {};
-      Object.keys(row).forEach(key => {
-        normalizedRow[key.toLowerCase()] = row[key];
-      });
-      return normalizedRow;
-    });
 
     // Store data
     userData[userId].uploadedBets = bets;
     userData[userId].lastUpload = new Date();
 
-    console.log('DEBUG: Parsed bets from Excel:', JSON.stringify(bets.slice(0, 2), null, 2));
+    console.log('DEBUG: Parsed bets:', JSON.stringify(bets.slice(0, 2), null, 2));
 
     ctx.reply(
-      `Loaded ${bets.length} bets from "${sheetName}" sheet!\n\n` +
+      `Loaded ${bets.length} bets!\n\n` +
       'Use /analyze to get AI recommendations\n' +
       'Or /stats to see performance metrics'
     );
   } catch (error) {
-    console.error('Excel processing error:', error);
-    ctx.reply('Error processing Excel file: ' + error.message);
+    console.error('File processing error:', error);
+    ctx.reply('Error processing file: ' + error.message);
   }
 });
 

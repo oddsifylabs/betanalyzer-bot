@@ -360,19 +360,38 @@ bot.command('analyze', async (ctx) => {
       const betsText = bets
         .map((b, i) => {
           const signal = b.signal || b.pick || b.team || b.bet || 'Unknown';
-          const odds = b.odds || b.line || 'N/A';
+          const odds = parseFloat(b.odds) || null;
           const game = b.game || 'N/A';
           const date = b.date || 'N/A';
-          const market = b.market || 'UNKNOWN';
-          const edge = b.edge_percent || 'N/A';
-          const ev = b.ev_percent || 'N/A';
-          return `${i + 1}. ${signal} @ ${odds}\nGame: ${game}\nDate: ${date}\nMarket: ${market} | Edge: ${edge}% | EV: ${ev}%`;
+          
+          // Calculate implied probability from American odds
+          let impliedProb = 'N/A';
+          if (odds !== null) {
+            if (odds > 0) {
+              impliedProb = (100 / (odds + 100) * 100).toFixed(1);
+            } else if (odds < 0) {
+              impliedProb = (Math.abs(odds) / (Math.abs(odds) + 100) * 100).toFixed(1);
+            }
+          }
+          
+          return `Pick ${i + 1}: ${signal}\nOdds: ${odds || 'N/A'} (Implied Prob: ${impliedProb}%)\nGame: ${game}\nDate: ${date}`;
         });
 
       const message = await callAI(routing.model, [
         {
           role: 'user',
-          content: `You are a sports betting expert. Analyze these picks and respond with PLACE or PASS for each:\n\n${betsText.join('\n')}\n\nFor each pick, explain your recommendation in 1-2 sentences. Focus on value, odds, and edge.`,
+          content: `You are a professional sports betting analyst. Analyze these picks and provide a PLACE or PASS recommendation for each.
+
+Bets to analyze:
+
+${betsText.join('\n\n')}
+
+For each pick, provide:
+1. PLACE or PASS recommendation
+2. Brief reasoning (1-2 sentences) considering the odds and implied probability
+3. Risk assessment if PLACE
+
+Focus on value, line shopping, and sharp action indicators.`,
         },
       ]);
 

@@ -398,6 +398,16 @@ bot.command('settings', (ctx) => {
   );
 });
 
+// Register commands with Telegram (shows in / menu)
+bot.telegram.setMyCommands([
+  { command: 'start', description: 'Start the bot' },
+  { command: 'upload_csv', description: 'Upload your bets (.txt file)' },
+  { command: 'analyze', description: 'Get AI analysis of your bets' },
+  { command: 'stats', description: 'View your performance metrics' },
+  { command: 'tier', description: 'See subscription options' },
+  { command: 'help', description: 'Show all commands' },
+]);
+
 // Launch
 bot.catch((err, ctx) => {
   console.error('Telegram error caught:', err);

@@ -129,12 +129,12 @@ bot.command('start', async (ctx) => {
       'BetAnalyzer Bot - Your AI Betting Assistant\n\n' +
       'Convert your sports bets into AI-powered analysis.\n\n' +
       'COMMANDS:\n' +
-      '• /upload_csv - Upload your bet picks (CSV)\n' +
+      '• /upload_csv - Upload bets (signal + odds columns only)\n' +
       '• /analyze - Get AI recommendations (auto-routed)\n' +
       '• /stats - View your performance\n' +
       '• /tier - See subscription options\n' +
       '• /help - Show all commands\n\n' +
-      'AI Routes to CHEAP/STANDARD/ADVANCED based on bet complexity.'
+      'Just 2 columns in Excel: signal, odds. That\'s all!'
     );
   } catch (error) {
     console.error('Error in /start command:', error.message);
@@ -198,14 +198,15 @@ bot.command('upload_csv', (ctx) => {
   try {
     ctx.reply(
       'UPLOAD YOUR BET PICKS\n\n' +
-      'Send an Excel file (.xlsx) with your bet data.\n\n' +
-      'Column Headers:\n' +
-      'signal,odds,game,market,edge_percent,ev_percent\n\n' +
-      'Example Row:\n' +
-      'Lakers ML,195,Lakers vs Celtics,MONEYLINE,1.5,3.2\n\n' +
-      'Required columns: signal, odds\n' +
-      'Optional: game, market, edge_percent, ev_percent, rank, sport, kelly_stake\n\n' +
-      'Attach Excel (.xlsx) file now'
+      'Send an Excel file (.xlsx) with your bets.\n\n' +
+      'ONLY 2 COLUMNS NEEDED:\n\n' +
+      'Column 1: signal\n' +
+      'Column 2: odds\n\n' +
+      'Example:\n' +
+      'Lakers ML | 195\n' +
+      'Warriors -5 | 210\n' +
+      'Knicks ML | 120\n\n' +
+      'That\'s all! Upload and I\'ll analyze.'
     );
   } catch (error) {
     console.error('Error in /upload_csv command:', error.message);

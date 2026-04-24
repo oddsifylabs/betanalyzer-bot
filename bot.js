@@ -8,6 +8,57 @@ require('dotenv').config();
 const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN);
 const client = new Anthropic();
 
+// Kimi Model Routing Configuration
+const KIMI_ROUTES = {
+  cheap: process.env.KIMI_CHEAP_MODEL || 'kimi-1-minimal',
+  standard: process.env.KIMI_STANDARD_MODEL || 'kimi-1-standard',
+  advanced: process.env.KIMI_ADVANCED_MODEL || 'kimi-1-advanced',
+  premium: process.env.KIMI_PREMIUM_MODEL || 'claude-opus-4-1', // fallback to Claude for premium
+};
+
+// Route betting analysis based on complexity
+function routeAnalysis(bets) {
+  const numBets = bets.length;
+  const hasEdgeData = bets.some(b => b.edge_percent && b.edge_percent !== 'N/A');
+  const hasEvData = bets.some(b => b.ev_percent && b.ev_percent !== 'N/A');
+  
+  // Estimate complexity score
+  let complexityScore = 0;
+  if (numBets > 5) complexityScore++;
+  if (numBets > 10) complexityScore++;
+  if (!hasEdgeData || !hasEvData) complexityScore++; // missing data requires reasoning
+  
+  // Route decision
+  if (complexityScore === 0 && numBets <= 3) {
+    return {
+      route: 'kimi:cheap',
+      tier: 'cheap',
+      reason: 'simple classification task with clear data, few bets, straightforward PLACE/PASS routing',
+      model: KIMI_ROUTES.cheap,
+      downgrade_after: null,
+      escalate_if: 'conflicting signals or edge data missing across multiple bets'
+    };
+  } else if (complexityScore <= 1 && numBets <= 7) {
+    return {
+      route: 'kimi:standard',
+      tier: 'standard',
+      reason: 'moderate complexity analysis with multiple bets and edge metrics',
+      model: KIMI_ROUTES.standard,
+      downgrade_after: 'use cheap for final formatting after analysis is stable',
+      escalate_if: 'recommendations require multi-step reasoning or high-confidence trade-off analysis'
+    };
+  } else {
+    return {
+      route: 'kimi:advanced',
+      tier: 'advanced',
+      reason: 'complex analysis with many bets, missing data, or ambiguous signals requiring multi-step reasoning',
+      model: KIMI_ROUTES.advanced,
+      downgrade_after: 'use standard or cheap for formatting after analysis plan is finalized',
+      escalate_if: 'analysis fails twice or task expands to portfolio optimization'
+    };
+  }
+}
+
 // In-memory user data (replace with Supabase for production)
 const userData = {};
 
@@ -31,12 +82,12 @@ bot.command('start', async (ctx) => {
       'BetAnalyzer Bot - Your AI Betting Assistant\n\n' +
       'Convert your sports bets into AI-powered analysis.\n\n' +
       'COMMANDS:\n' +
-      '• /upload_csv - Upload your bet picks (CSV)\n' +
-      '• /analyze - Get Claude AI recommendations\n' +
+      '• /upload_csv - Upload your bet picks (CSV or JSON)\n' +
+      '• /analyze - Get AI recommendations (auto-routed)\n' +
       '• /stats - View your performance\n' +
       '• /tier - See subscription options\n' +
       '• /help - Show all commands\n\n' +
-      'CSV Format: pick, odds, stake, result'
+      'AI Routes to CHEAP/STANDARD/ADVANCED based on bet complexity.'
     );
   } catch (error) {
     console.error('Error in /start command:', error.message);
@@ -180,7 +231,7 @@ bot.on('document', async (ctx) => {
   }
 });
 
-// /analyze command - Get Claude AI recommendations
+// /analyze command - Get AI recommendations (Kimi-routed)
 bot.command('analyze', async (ctx) => {
   try {
     const userId = ctx.from.id;
@@ -200,7 +251,11 @@ bot.command('analyze', async (ctx) => {
       }
     }
 
-    ctx.reply('Analyzing with Claude AI...');
+    // Route analysis based on complexity
+    const routing = routeAnalysis(bets);
+    console.log('ROUTING DECISION:', JSON.stringify(routing, null, 2));
+
+    ctx.reply(`Analyzing with ${routing.tier.toUpperCase()} model...`);
 
     try {
       console.log('DEBUG: Bets data:', JSON.stringify(bets, null, 2));
@@ -218,7 +273,7 @@ bot.command('analyze', async (ctx) => {
         });
 
       const message = await client.messages.create({
-        model: 'claude-opus-4-1',
+        model: routing.model,
         max_tokens: 1024,
         messages: [
           {
@@ -233,7 +288,7 @@ bot.command('analyze', async (ctx) => {
 
       ctx.reply(
         'AI ANALYSIS RESULTS\n\n' + analysis + '\n\n' +
-        'Powered by Claude AI'
+        `Powered by ${routing.tier.toUpperCase()} Model (${routing.route})`
       );
     } catch (error) {
       ctx.reply('Analysis failed: ' + error.message);

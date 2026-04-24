@@ -278,30 +278,65 @@ bot.on('document', async (ctx) => {
     }
 
     const bets = [];
+    let isFormattedExport = false;
 
     console.log(`DEBUG: Total lines in file: ${lines.length}`);
     console.log(`DEBUG: First 3 lines raw:`, lines.slice(0, 3));
 
-    for (const line of lines) {
-      const parts = line.split('|').map(p => p.trim());
+    // Check if this is a formatted Sharp bot export (contains "Signal:" pattern)
+    if (fileContent.includes('Signal:') && fileContent.includes('Odds:')) {
+      isFormattedExport = true;
+      console.log('DEBUG: Detected formatted Sharp bot export');
       
-      console.log(`DEBUG: Parsing line: "${line}"`);
-      console.log(`DEBUG: Parts after split:`, parts);
+      // Parse formatted export
+      // Pattern: "Signal: <signal>" and "Odds: <odds>"
+      const signalMatches = fileContent.match(/Signal:\s*([^\n│]+)/g);
+      const oddsMatches = fileContent.match(/Odds:\s*([^\n│]+)/g);
       
-      if (parts.length < 2) {
-        console.log('DEBUG: Skipping invalid line (less than 2 parts):', line);
-        continue;
+      if (signalMatches && oddsMatches) {
+        for (let i = 0; i < Math.min(signalMatches.length, oddsMatches.length); i++) {
+          const signal = signalMatches[i].replace('Signal:', '').trim();
+          const odds = oddsMatches[i].replace('Odds:', '').trim();
+          
+          bets.push({
+            signal: signal || 'Unknown',
+            odds: odds || 'N/A',
+            game: 'N/A',
+            date: 'N/A',
+          });
+          
+          console.log(`DEBUG: Parsed formatted bet ${i + 1}: signal="${signal}", odds="${odds}"`);
+        }
       }
+    } else {
+      // Parse simple pipe-separated format
+      for (const line of lines) {
+        // Skip comment lines
+        if (line.trim().startsWith('#')) {
+          console.log(`DEBUG: Skipping comment line: ${line}`);
+          continue;
+        }
+        
+        const parts = line.split('|').map(p => p.trim());
+        
+        console.log(`DEBUG: Parsing line: "${line}"`);
+        console.log(`DEBUG: Parts after split:`, parts);
+        
+        if (parts.length < 2) {
+          console.log('DEBUG: Skipping invalid line (less than 2 parts):', line);
+          continue;
+        }
 
-      const bet = {
-        signal: parts[0] || 'Unknown',
-        odds: parts[1] || 'N/A',
-        game: parts[2] || 'N/A',
-        date: parts[3] || 'N/A',
-      };
+        const bet = {
+          signal: parts[0] || 'Unknown',
+          odds: parts[1] || 'N/A',
+          game: parts[2] || 'N/A',
+          date: parts[3] || 'N/A',
+        };
 
-      console.log(`DEBUG: Created bet object:`, bet);
-      bets.push(bet);
+        console.log(`DEBUG: Created bet object:`, bet);
+        bets.push(bet);
+      }
     }
 
     console.log(`DEBUG: Total bets parsed: ${bets.length}`);

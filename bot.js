@@ -6,15 +6,61 @@ const path = require('path');
 require('dotenv').config();
 
 const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN);
-const client = new Anthropic();
+const anthropicClient = new Anthropic();
+
+// Kimi API Client
+const kimiApiKey = process.env.KIMI_API_KEY;
+const kimiApiBase = process.env.KIMI_API_BASE || 'https://api.moonshot.cn/v1';
 
 // Kimi Model Routing Configuration
 const KIMI_ROUTES = {
-  cheap: process.env.KIMI_CHEAP_MODEL || 'kimi-1-minimal',
-  standard: process.env.KIMI_STANDARD_MODEL || 'kimi-1-standard',
-  advanced: process.env.KIMI_ADVANCED_MODEL || 'kimi-1-advanced',
+  cheap: process.env.KIMI_CHEAP_MODEL || 'moonshot-v1-8k',
+  standard: process.env.KIMI_STANDARD_MODEL || 'moonshot-v1-32k',
+  advanced: process.env.KIMI_ADVANCED_MODEL || 'moonshot-v1-128k',
   premium: process.env.KIMI_PREMIUM_MODEL || 'claude-opus-4-1', // fallback to Claude for premium
 };
+
+// Helper function to call Kimi API
+async function callKimiAPI(model, messages, maxTokens = 1024) {
+  if (!kimiApiKey) {
+    throw new Error('KIMI_API_KEY not set in environment variables');
+  }
+
+  try {
+    const response = await axios.post(`${kimiApiBase}/chat/completions`, {
+      model,
+      messages,
+      max_tokens: maxTokens,
+      temperature: 0.7,
+    }, {
+      headers: {
+        'Authorization': `Bearer ${kimiApiKey}`,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    return response.data.choices[0].message.content;
+  } catch (error) {
+    console.error('Kimi API error:', error.response?.data || error.message);
+    throw new Error(`Kimi API call failed: ${error.message}`);
+  }
+}
+
+// Helper function to call appropriate AI API based on model
+async function callAI(model, messages, maxTokens = 1024) {
+  // If model is Claude, use Anthropic
+  if (model.includes('claude')) {
+    const response = await anthropicClient.messages.create({
+      model,
+      max_tokens: maxTokens,
+      messages,
+    });
+    return response.content[0].text;
+  }
+
+  // Otherwise assume it's a Kimi model
+  return await callKimiAPI(model, messages, maxTokens);
+}
 
 // Route betting analysis based on complexity
 function routeAnalysis(bets) {
@@ -272,18 +318,14 @@ bot.command('analyze', async (ctx) => {
           return `${i + 1}. ${signal} @ ${odds}\nGame: ${game}\nMarket: ${market} | Edge: ${edge}% | EV: ${ev}%`;
         });
 
-      const message = await client.messages.create({
-        model: routing.model,
-        max_tokens: 1024,
-        messages: [
-          {
-            role: 'user',
-            content: `You are a sports betting expert. Analyze these picks and respond with PLACE or PASS for each:\n\n${betsText.join('\n')}\n\nFor each pick, explain your recommendation in 1-2 sentences. Focus on value, odds, and edge.`,
-          },
-        ],
-      });
+      const message = await callAI(routing.model, [
+        {
+          role: 'user',
+          content: `You are a sports betting expert. Analyze these picks and respond with PLACE or PASS for each:\n\n${betsText.join('\n')}\n\nFor each pick, explain your recommendation in 1-2 sentences. Focus on value, odds, and edge.`,
+        },
+      ]);
 
-      const analysis = message.content[0].text;
+      const analysis = message;
       userData[userId].lastAnalysis = new Date();
 
       ctx.reply(

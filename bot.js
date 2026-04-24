@@ -232,7 +232,20 @@ bot.on('document', async (ctx) => {
     // Download file
     const fileLink = await ctx.telegram.getFileLink(file.file_id);
     const response = await axios.get(fileLink);
-    const fileContent = response.data;
+    let fileContent = response.data;
+
+    // Remove BOM if present (UTF-8 BOM: EF BB BF)
+    if (typeof fileContent === 'string' && fileContent.charCodeAt(0) === 0xFEFF) {
+      fileContent = fileContent.slice(1);
+      console.log('DEBUG: Removed UTF-8 BOM from file');
+    }
+
+    // Trim whitespace
+    fileContent = fileContent.trim();
+    
+    console.log('DEBUG: File content preview:', fileContent.substring(0, 100));
+    console.log('DEBUG: File content length:', fileContent.length);
+    console.log('DEBUG: First char code:', fileContent.charCodeAt(0));
 
     let bets = [];
 
@@ -241,16 +254,35 @@ bot.on('document', async (ctx) => {
       try {
         bets = JSON.parse(fileContent);
         if (!Array.isArray(bets)) {
-          ctx.reply('JSON must be an array of bets');
+          ctx.reply('JSON must be an array of bets. Example:\n[\n  {"signal": "Lakers", "odds": 195},\n  {"signal": "Warriors", "odds": 210}\n]');
           return;
         }
       } catch (parseError) {
-        ctx.reply('Invalid JSON format: ' + parseError.message);
+        console.error('JSON Parse Error:', {
+          message: parseError.message,
+          position: parseError.message.match(/position (\d+)/)?.[1],
+          preview: fileContent.substring(0, 200),
+        });
+        
+        // Try to provide helpful error message
+        if (parseError.message.includes('Unexpected token')) {
+          const match = parseError.message.match(/position (\d+)/);
+          const pos = match ? parseInt(match[1]) : 0;
+          const context = fileContent.substring(Math.max(0, pos - 20), pos + 20);
+          ctx.reply(`Invalid JSON format at position ${pos}.\n\nContext: ...${context}...\n\nMake sure:\n• JSON is wrapped in [ ]\n• Use double quotes " not single quotes\n• No trailing commas`);
+        } else {
+          ctx.reply('Invalid JSON format: ' + parseError.message);
+        }
         return;
       }
     } else {
       // Parse CSV
-      const rows = fileContent.trim().split('\n');
+      const rows = fileContent.split('\n').filter(row => row.trim());
+      if (rows.length < 2) {
+        ctx.reply('CSV must have at least a header row and one data row');
+        return;
+      }
+      
       const headers = rows[0].split(',').map(h => h.trim());
 
       for (let i = 1; i < rows.length; i++) {
@@ -273,6 +305,7 @@ bot.on('document', async (ctx) => {
       'Or /stats to see performance metrics'
     );
   } catch (error) {
+    console.error('File processing error:', error);
     ctx.reply('Error processing file: ' + error.message);
   }
 });

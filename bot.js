@@ -1,6 +1,7 @@
 const { Telegraf } = require('telegraf');
 const axios = require('axios');
 const Anthropic = require('@anthropic-ai/sdk');
+const XLSX = require('xlsx');
 const fs = require('fs');
 const path = require('path');
 require('dotenv').config();
@@ -192,99 +193,99 @@ bot.command('tier', (ctx) => {
   }
 });
 
-// /upload_csv command - Prompt user to attach a CSV file
+// /upload_csv command - Prompt user to attach an Excel file
 bot.command('upload_csv', (ctx) => {
   try {
     ctx.reply(
       'UPLOAD YOUR BET PICKS\n\n' +
-      'Send a CSV file with your bet data.\n\n' +
-      'CSV Format:\n' +
-      'signal,odds,game,market,edge_percent,ev_percent\n' +
-      'Lakers ML,195,Lakers vs Celtics,MONEYLINE,1.5,3.2\n' +
-      'Warriors -5,210,Warriors vs Grizzlies,SPREAD,2.1,4.5\n\n' +
+      'Send an Excel file (.xlsx) with your bet data.\n\n' +
+      'Column Headers:\n' +
+      'signal,odds,game,market,edge_percent,ev_percent\n\n' +
+      'Example Row:\n' +
+      'Lakers ML,195,Lakers vs Celtics,MONEYLINE,1.5,3.2\n\n' +
       'Required columns: signal, odds\n' +
       'Optional: game, market, edge_percent, ev_percent, rank, sport, kelly_stake\n\n' +
-      'Attach CSV file now'
+      'Attach Excel (.xlsx) file now'
     );
   } catch (error) {
     console.error('Error in /upload_csv command:', error.message);
   }
 });
 
-// Handle CSV file uploads
+// Handle Excel (.xlsx) file uploads
 bot.on('document', async (ctx) => {
   const userId = ctx.from.id;
   const file = ctx.message.document;
   const fileName = file.file_name.toLowerCase();
 
   // Check file type
-  if (!fileName.endsWith('.csv')) {
-    ctx.reply('Please upload a CSV file (e.g., bets.csv)');
+  if (!fileName.endsWith('.xlsx') && !fileName.endsWith('.xls')) {
+    ctx.reply('Please upload an Excel file (.xlsx or .xls)');
     return;
   }
 
-  ctx.reply('Processing CSV... one moment');
+  ctx.reply('Processing Excel file... one moment');
 
   try {
     // Download file
     const fileLink = await ctx.telegram.getFileLink(file.file_id);
-    const response = await axios.get(fileLink);
-    let fileContent = response.data;
-
-    // Remove BOM if present (UTF-8 BOM: EF BB BF)
-    if (typeof fileContent === 'string' && fileContent.charCodeAt(0) === 0xFEFF) {
-      fileContent = fileContent.slice(1);
-      console.log('DEBUG: Removed UTF-8 BOM from file');
-    }
-
-    // Trim whitespace
-    fileContent = fileContent.trim();
+    const response = await axios.get(fileLink, { responseType: 'arraybuffer' });
     
-    console.log('DEBUG: CSV content preview:', fileContent.substring(0, 150));
-    console.log('DEBUG: CSV content length:', fileContent.length);
+    console.log('DEBUG: Excel file downloaded, size:', response.data.length);
 
-    // Parse CSV
-    const rows = fileContent.split('\n').filter(row => row.trim());
-    if (rows.length < 2) {
-      ctx.reply('CSV must have at least a header row and one data row');
+    // Parse Excel file
+    const workbook = XLSX.read(response.data, { type: 'buffer' });
+    const sheetName = workbook.SheetNames[0];
+    
+    if (!sheetName) {
+      ctx.reply('Excel file is empty or has no sheets');
       return;
     }
-    
-    const headers = rows[0].split(',').map(h => h.trim());
-    const bets = [];
 
-    for (let i = 1; i < rows.length; i++) {
-      const values = rows[i].split(',').map(v => v.trim());
-      const bet = {};
-      headers.forEach((header, idx) => {
-        bet[header] = values[idx];
-      });
-      bets.push(bet);
+    const sheet = workbook.Sheets[sheetName];
+    const rows = XLSX.utils.sheet_to_json(sheet);
+
+    if (rows.length === 0) {
+      ctx.reply('Excel sheet is empty. Please add bet data.');
+      return;
     }
 
     // Validate required columns
     const requiredColumns = ['signal', 'odds'];
-    const hasRequired = requiredColumns.every(col => headers.includes(col));
+    const firstRow = rows[0];
+    const hasRequired = requiredColumns.every(col => 
+      Object.keys(firstRow).some(key => key.toLowerCase() === col.toLowerCase())
+    );
     
     if (!hasRequired) {
-      ctx.reply(`CSV must have required columns: ${requiredColumns.join(', ')}\n\nFound columns: ${headers.join(', ')}`);
+      const availableColumns = Object.keys(firstRow).join(', ');
+      ctx.reply(`Excel must have required columns: ${requiredColumns.join(', ')}\n\nFound columns: ${availableColumns}`);
       return;
     }
+
+    // Normalize column names (case-insensitive)
+    const bets = rows.map(row => {
+      const normalizedRow = {};
+      Object.keys(row).forEach(key => {
+        normalizedRow[key.toLowerCase()] = row[key];
+      });
+      return normalizedRow;
+    });
 
     // Store data
     userData[userId].uploadedBets = bets;
     userData[userId].lastUpload = new Date();
 
-    console.log('DEBUG: Parsed bets:', JSON.stringify(bets.slice(0, 2), null, 2));
+    console.log('DEBUG: Parsed bets from Excel:', JSON.stringify(bets.slice(0, 2), null, 2));
 
     ctx.reply(
-      `Loaded ${bets.length} bets!\n\n` +
+      `Loaded ${bets.length} bets from "${sheetName}" sheet!\n\n` +
       'Use /analyze to get AI recommendations\n' +
       'Or /stats to see performance metrics'
     );
   } catch (error) {
-    console.error('CSV processing error:', error);
-    ctx.reply('Error processing CSV: ' + error.message);
+    console.error('Excel processing error:', error);
+    ctx.reply('Error processing Excel file: ' + error.message);
   }
 });
 

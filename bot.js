@@ -26,18 +26,19 @@ bot.use((ctx, next) => {
 
 // /start command
 bot.command('start', (ctx) => {
-  ctx.reply(
-    '🎯 *BetAnalyzer Bot*\n\n' +
-    'Convert your sports bets into AI-powered analysis.\n\n' +
-    '*Commands:*\n' +
-    '/upload_csv - Upload your bet picks (CSV)\n' +
-    '/analyze - Get Claude AI recommendations\n' +
-    '/stats - View your performance\n' +
-    '/tier - See subscription options\n' +
-    '/help - Show all commands\n\n' +
-    '_Upload a CSV with columns: pick, odds, stake, result_',
-    { parse_mode: 'Markdown' }
-  );
+  const welcomeMessage = `🎯 *BetAnalyzer Bot*
+
+Convert your sports bets into AI-powered analysis.
+
+*Commands:*
+/upload_csv - Upload your bet picks (CSV)
+/analyze - Get Claude AI recommendations
+/stats - View your performance
+/tier - See subscription options
+/help - Show all commands
+
+_Upload a CSV with columns: pick, odds, stake, result_`;
+  ctx.reply(welcomeMessage, { parse_mode: 'Markdown' });
 });
 
 // /help command

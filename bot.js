@@ -186,7 +186,15 @@ bot.command('analyze', async (ctx) => {
       console.log('DEBUG: First bet keys:', Object.keys(bets[0]));
       
       const betsText = bets
-        .map((b, i) => `${i + 1}. ${b.signal || b.pick || b.team || b.bet || 'Unknown'} @ ${b.odds || b.line || 'N/A'} (Game: ${b.game || 'N/A'})`);
+        .map((b, i) => {
+          const signal = b.signal || b.pick || b.team || b.bet || 'Unknown';
+          const odds = b.odds || b.line || 'N/A';
+          const game = b.game || 'N/A';
+          const market = b.market || 'UNKNOWN';
+          const edge = b.edge_percent || 'N/A';
+          const ev = b.ev_percent || 'N/A';
+          return `${i + 1}. ${signal} @ ${odds}\nGame: ${game}\nMarket: ${market} | Edge: ${edge}% | EV: ${ev}%`;
+        });
 
       const message = await client.messages.create({
         model: 'claude-opus-4-1',

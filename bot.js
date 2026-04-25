@@ -384,14 +384,14 @@ bot.command('analyze', async (ctx) => {
       return;
     }
 
-    // Check tier limit (free users: 1/day) - DISABLED FOR TESTING
-    // if (userData[userId].tier === 'free') {
-    //   const lastAnalysis = userData[userId].lastAnalysis;
-    //   if (lastAnalysis && new Date() - lastAnalysis < 86400000) {
-    //     ctx.reply('Free users get 1 analysis per day. Upgrade to Pro for unlimited: /tier');
-    //     return;
-    //   }
-    // }
+    // Check tier limit (free users: 1/day)
+    if (userData[userId].tier === 'free') {
+      const lastAnalysis = userData[userId].lastAnalysis;
+      if (lastAnalysis && new Date() - lastAnalysis < 86400000) {
+        ctx.reply('Free users get 1 analysis per day. Upgrade to Pro for unlimited: /tier');
+        return;
+      }
+    }
 
     // Route analysis based on complexity
     const routing = routeAnalysis(bets);
